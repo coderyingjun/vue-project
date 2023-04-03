@@ -1,0 +1,413 @@
+<template>
+  <div>
+    <el-form :model="ruleForm2" :rules="rules2"
+             status-icon
+             ref="ruleForm2"
+             label-position="left"
+             label-width="0px"
+             class="demo-ruleForm login-page">
+      <div style="width: 40%; ">
+        <el-form-item  prop="title" >
+          <el-input type="text"
+                    v-model="ruleForm2.author"
+                    auto-complete="off"
+                    placeholder="作者"
+                    disabled
+          ></el-input>
+        </el-form-item>
+      </div>
+      <div style="width: 40%; ">
+        <el-form-item  prop="title" >
+          <el-input type="text"
+                    v-model="ruleForm2.title"
+                    auto-complete="off"
+                    placeholder="请输入标题"
+          ></el-input>
+        </el-form-item>
+      </div>
+      <div style="width: 25%; ">
+        <el-form-item  prop="keywords" >
+          <el-input type="text"
+                    v-model="ruleForm2.keywords"
+                    @keyup.native="replaceSem"
+                    auto-complete="off"
+                    placeholder="请输入关键字,关键字间使用分号分割"
+          ></el-input>
+        </el-form-item>
+      </div>
+      <div style="margin-right: 90%;" >
+        <el-form-item  prop="subject" >
+          <el-cascader v-model="ruleForm2.subject"
+                       ref="sb"
+                       :placeholder="subjectPlace"
+                       :options="subjects"
+                       @change="toValidate"
+                       filterable></el-cascader>
+        </el-form-item>
+      </div>
+      <div style="margin-right: 90%">
+        <el-form-item prop="class" >
+          <el-select v-model="ruleForm2.class" filterable placeholder="请选择类别" @change="toValidate">
+            <el-option
+                v-for="item in classes"
+                :key="item.id"
+                :label="item.label"
+                :value="item.value">
+            </el-option>
+          </el-select>
+        </el-form-item>
+      </div>
+      <div style="margin-right: 90%;" >
+        <el-form-item style="margin-left: -15%">
+          <el-switch
+              style="display: block"
+              v-model="ruleForm2.statusCode"
+              active-color="#13ce66"
+              inactive-color="#ff4949"
+              active-value= 1
+              inactive-value= -1
+              active-text="发布"
+              inactive-text="不通过">
+          </el-switch>
+        </el-form-item>
+      </div>
+      <TEditor :my-key="myKey" ref="editor" v-model="ruleForm2.content" style="margin-bottom:0"></TEditor>
+      <div v-if="showUpload" style="margin-right: 90%;height: 50px;margin-top: 0%" >
+        <el-upload ref="upload"
+
+                   class="upload-demo"
+                   :action="uploadUrl"
+                   :headers="{'Key':myKey,'Cid':this.id}"
+                   :on-preview="handlePreview"
+                   :on-remove="handleRemove"
+                   :before-remove="beforeRemove"
+                   :multiple="false"
+                   :limit="3"
+                   :on-exceed="handleExceed"
+                   :file-list.sync="fileList"
+                   :on-success="handleSuccess"
+                   >
+          <el-button size="small" type="primary" >上传积分附件</el-button>
+        </el-upload>
+      </div>
+      <el-button round style="margin-right:0%" @click="submit">保存修改</el-button>
+    </el-form>
+  </div>
+</template>
+
+<script>
+import TEditor from '@/components/editor/TEditor'
+import {request} from '@/network/request'
+import {getKey,uploadPointfile,delEditfile,getKinds,getSubjects,getCase,editCase,updatePFname} from '@/api/api'
+import Vue from 'vue'
+export default {
+  name: "editor",
+  components: {TEditor},
+  data(){
+    return {
+      showUpload:true,
+      subjectPlace:"请选择学科",
+      id:"",
+      uploadUrl:uploadPointfile,
+      fileList:[],
+      fname:["","",""],
+      myKey:'',
+      ruleForm2: {
+        author:"",
+        statusCode:'0',
+        title:'',
+        subject:'',
+        keywords: '',
+        class: '',
+        content:''
+      },rules2: {
+        title: [{required: true, message: '请输入标题', trigger: 'blur'}],
+        subject: [{required: true, message: '请选择学科', trigger: 'blur'}],
+        keywords: [{required: true, message: '请输入至少一个关键字', trigger: 'blur'}],
+        class: [{required: true, message: '请选择类别', trigger: 'blur'}],
+        content: [{required: true, message: '输入内容不能为空', trigger: 'blur'}],
+      },
+      subjects:[],
+      classes:[],
+    }
+  },
+  methods: {
+    toValidate(){
+      this.$refs.ruleForm2.validate()
+    },
+    handleSuccess(response, file, fileList){
+      this.fileList=fileList.map((i)=>{
+        Vue.set(i,"id",i.response.data.id)
+        Vue.set(i,"url",i.response.data.url)
+        Vue.set(i,"name",i.response.data.name)
+        for(let j in this.fileList){
+          if(this.fileList[j].id===i.id){
+            Vue.set(i,"name",this.fname[j])
+            break
+          }
+        }
+        return i
+      })
+    },
+    replaceSem() {
+      this.ruleForm2.keywords = this.ruleForm2.keywords.replace(/；/g, ";")
+      this.ruleForm2.keywords=this.ruleForm2.keywords.replace(/\s+/g,"")
+    },
+    submit() {
+      this.$refs.ruleForm2.validate((valid) => {
+        if (valid) {
+          const token = localStorage.getItem("adminToken")
+          if (token !== null || token !== '') {
+            const config = {
+              url: editCase,
+              method: 'post',
+              data: {
+                id: this.id,
+                statusCode: this.ruleForm2.statusCode,
+                sid: this.ruleForm2.subject[1],
+                kid: this.ruleForm2.class,
+                title: this.ruleForm2.title,
+                content: this.ruleForm2.content,
+                keywords: this.ruleForm2.keywords
+              }, headers: {
+                'Token': token,
+                'Key': this.myKey
+              }
+            }
+            request(config).then((data) => {
+              if (data.data.code === 0) {
+                this.showUpload=false
+                alert("案例提交成功")
+                window.close()
+              } else {
+                alert(data.data.message)
+              }
+            }).catch(() => {
+              alert("服务器开小差了")
+            })
+          } else {
+            alert("请先登录")
+            this.$router.push("/login")
+          }
+        } else {
+          alert("案例信息不完整")
+        }
+      })
+    },
+    handleRemove(file, fileList) {
+      console.log(fileList);
+      const token = localStorage.getItem("adminToken")
+      let fid = file.id
+      if (fid === undefined) {
+        fid = file.response.data.id
+      }
+      const config = {
+        url: delEditfile,
+        method: 'get',
+        params: {
+          id: fid,
+          cid: this.id
+        }, headers: {
+          'Key': this.myKey,
+          'Token': token
+        }
+      }
+      request(config).then((data) => {
+        if (data.data.code === 0) {
+          alert("删除成功")
+          for(let i in this.fileList){
+            if(this.fileList[i].id===fid){
+              this.fileList.splice(i,1)
+            }
+          }
+          console.log(this.fileList)
+        } else {
+          alert(data.data.message)
+        }
+      }).catch((err) => {
+        console.log(err)
+        alert("服务器开小差了")
+      })
+    },
+    handlePreview(file) {
+      console.log(this.$refs.upload.fileList)
+      const token = localStorage.getItem("adminToken")
+      let id=file.id
+      let url=file.url
+      if(id===undefined){
+        id=file.response.data.id
+        url=file.response.data.url
+      }
+      this.$prompt('请输入名称', '更改附件名', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+      }).then(({ value }) => {
+        const config={
+          url: updatePFname,
+          method: 'get',
+          headers:{
+            "Token":token,
+            "Key":this.myKey
+          },
+          params:{
+            "id":id,
+            "name":value
+          },
+        }
+        request(config).then((data)=>{
+          if(data.data.code===0){
+            for(let i in this.fileList){
+              if(this.fileList[i].id===id){
+                const mf=this.fileList[i]
+                Vue.set(mf,'name',value)
+                this.fname[i]=value
+                this.fileList.splice(i,1,mf)
+                break
+              }
+            }
+          }
+            this.$message({
+              type: 'success',
+              message: '附件名称修改成功'
+            });
+        }).catch(()=>{
+          this.$message({
+            type: 'tip',
+            message: '更改失败'
+          });
+        })
+
+      }).catch(() => {
+
+      });
+      this.$notify.info({
+        title: '下载地址',
+        message: url
+      });
+    },
+    handleExceed(files, fileList) {
+      this.$message.warning(`当前限制选择 3 个文件，本次选择了 ${files.length} 个文件，共选择了 ${files.length + fileList.length} 个文件`);
+    },
+    beforeRemove(file, fileList) {
+      console.log(fileList)
+      console.log(this.fileList)
+      return this.$confirm(`确定移除 ${file.name}？`)
+    }
+  },
+  mounted() {
+    this.id=this.$route.params.id
+    //初始化获取key
+    const token=localStorage.getItem("adminToken")
+    if(token!==null||token!==''){
+      const config={
+        url:getKey,
+        method: 'get',
+        params:{
+          token:token
+        }
+      }
+      request(config).then((data)=>{
+        if(data.data.code===0){
+          this.myKey=data.data.data
+        }else {
+          alert(data.data.message)
+        }
+      }).catch(()=>{
+        alert("服务器开小差了，请刷新重试")
+
+      })
+    }else {
+      alert("请先登录")
+      this.$router.push("/login")
+    }
+    //获取类别
+    const config0={
+      url:getKinds,
+      method: 'get'
+    }
+    request(config0).then((data)=>{
+      if(data.data.code===0){
+        for(let i of data.data.data){
+          const class0={value:i.id,label:i.name}
+          this.classes.push(class0)
+        }
+      }else{
+        alert("获取类别失败，请刷新重试")
+      }
+    }).catch(()=>{
+      alert("服务器开小差了，请刷新重试")
+    })
+    //获取学科
+    const config1={
+      url:getSubjects,
+      method: 'get'
+    }
+    request(config1).then((data)=>{
+      if(data.data.code===0){
+        for(let i of data.data.data){
+          const subject={value:i.id,
+            label:i.name,
+            children:[]}
+          for(let j of i.subjects){
+            const child={value:j.id,
+              label:j.name}
+            subject.children.push(child)
+          }
+          this.subjects.push(subject)
+        }
+      }else{
+        alert("获取学科失败，请刷新重试")
+      }
+    }).catch(()=>{
+      alert("服务器开小差了，请刷新重试")
+    })
+    //获取案例内容
+    const config2={
+      url:getCase,
+      method: 'get',
+      params: {
+        id:this.id
+      }
+    }
+    request(config2).then((data)=>{
+      if(data.data.code===0){
+        let cas=data.data.data
+        this.ruleForm2.title=cas.title
+        this.ruleForm2.class=cas.kid
+        this.ruleForm2.author=cas.author
+        this.subjectPlace=cas.fname+"/"+cas.sname
+        this.ruleForm2.subject=[""+cas.fid,""+cas.sid]
+        this.ruleForm2.content=cas.content
+        if(cas.statusCode===0){
+          this.ruleForm2.statusCode="1"
+        }else{
+          this.ruleForm2.statusCode=""+cas.statusCode
+        }
+        for(let i=0;i<cas.keyword.length;i++){
+          if(i===0){
+            this.ruleForm2.keywords=cas.keyword[i]
+          }else{
+            this.ruleForm2.keywords+=";"+cas.keyword[i]
+          }
+        }
+        for(let i of cas.files){
+          let file={}
+          Vue.set(file,"name",i.name)
+          Vue.set(file,"url",i.url)
+          Vue.set(file,"id",i.id)
+          this.fileList.push(file)
+        }
+      }else{
+        alert(data.data.message)
+      }
+    }).catch(()=>{
+      alert("服务器开小差了，请刷新重试")
+    })
+  }
+}
+</script>
+
+<style scoped>
+
+
+</style>
